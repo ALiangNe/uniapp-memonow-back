@@ -4,6 +4,8 @@ const bodyParser = require('body-parser');
 require('dotenv').config();
 
 const memoRoutes = require('./routes/memos');
+const userRoutes = require('./routes/users');
+const authRoutes = require('./routes/auth');
 const { initDatabase } = require('./config/database');
 
 const app = express();
@@ -16,6 +18,8 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // 路由配置
 app.use('/api/memos', memoRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/auth', authRoutes);
 
 // 根路径
 app.get('/', (req, res) => {
@@ -23,14 +27,35 @@ app.get('/', (req, res) => {
     code: 200,
     message: '备忘录API服务运行正常',
     data: {
-      version: '1.0.0',
-      endpoints: [
-        'GET /api/memos - 获取备忘录列表',
-        'GET /api/memos/:id - 获取备忘录详情',
-        'POST /api/memos - 创建备忘录',
-        'PUT /api/memos/:id - 更新备忘录',
-        'DELETE /api/memos/:id - 删除备忘录'
-      ]
+      version: '2.0.0',
+      description: '支持多用户的备忘录API服务',
+      features: [
+        '✅ 用户身份识别与数据隔离',
+        '✅ 微信小程序登录支持',
+        '✅ 备忘录增删改查',
+        '✅ 用户信息管理',
+        '✅ 数据安全保护'
+      ],
+      endpoints: {
+        auth: [
+          'POST /api/auth/wechat-login - 微信小程序登录',
+          'POST /api/auth/test-login - 测试登录'
+        ],
+        users: [
+          'POST /api/users/register - 用户注册/更新',
+          'GET /api/users/profile - 获取用户信息',
+          'PUT /api/users/profile - 更新用户信息',
+          'GET /api/users/stats - 获取用户统计'
+        ],
+        memos: [
+          'GET /api/memos - 获取备忘录列表（需要User-Id）',
+          'GET /api/memos/:id - 获取备忘录详情（需要User-Id）',
+          'POST /api/memos - 创建备忘录（需要User-Id）',
+          'PUT /api/memos/:id - 更新备忘录（需要User-Id）',
+          'DELETE /api/memos/:id - 删除备忘录（需要User-Id）'
+        ]
+      },
+      notice: '所有备忘录相关接口都需要在请求头中包含 User-Id 字段'
     }
   });
 });
