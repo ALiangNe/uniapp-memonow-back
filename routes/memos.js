@@ -1,11 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const Memo = require('../models/Memo');
+const { userAuthMiddleware } = require('../middleware/auth');
 
 // 获取备忘录列表
-router.get('/', async (req, res) => {
+router.get('/', userAuthMiddleware, async (req, res) => {
   try {
-    const memos = await Memo.findAll();
+    const userId = req.userId;
+    const memos = await Memo.findByUserId(userId);
+
     res.json({
       code: 200,
       message: '获取成功',
@@ -22,10 +25,11 @@ router.get('/', async (req, res) => {
 });
 
 // 获取备忘录详情
-router.get('/:id', async (req, res) => {
+router.get('/:id', userAuthMiddleware, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    
+    const userId = req.userId;
+
     if (isNaN(id) || id <= 0) {
       return res.status(400).json({
         code: 400,
@@ -33,9 +37,9 @@ router.get('/:id', async (req, res) => {
         data: null
       });
     }
-    
-    const memo = await Memo.findById(id);
-    
+
+    const memo = await Memo.findByIdAndUserId(id, userId);
+
     if (!memo) {
       return res.status(404).json({
         code: 404,
@@ -43,7 +47,7 @@ router.get('/:id', async (req, res) => {
         data: null
       });
     }
-    
+
     res.json({
       code: 200,
       message: '获取成功',
@@ -60,10 +64,11 @@ router.get('/:id', async (req, res) => {
 });
 
 // 创建备忘录
-router.post('/', async (req, res) => {
+router.post('/', userAuthMiddleware, async (req, res) => {
   try {
-    const { title, content } = req.body;
-    
+    const { title, content, priority, status, tags } = req.body;
+    const userId = req.userId;
+
     // 验证输入数据
     const errors = Memo.validate(title, content);
     if (errors.length > 0) {
@@ -73,9 +78,14 @@ router.post('/', async (req, res) => {
         data: { errors }
       });
     }
-    
-    const memo = await Memo.create(title.trim(), content.trim());
-    
+
+    const options = {};
+    if (priority !== undefined) options.priority = priority;
+    if (status !== undefined) options.status = status;
+    if (tags !== undefined) options.tags = tags;
+
+    const memo = await Memo.create(userId, title.trim(), content.trim(), options);
+
     res.status(201).json({
       code: 201,
       message: '创建成功',
@@ -92,11 +102,12 @@ router.post('/', async (req, res) => {
 });
 
 // 更新备忘录
-router.put('/:id', async (req, res) => {
+router.put('/:id', userAuthMiddleware, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { title, content } = req.body;
-    
+    const { title, content, priority, status, tags } = req.body;
+    const userId = req.userId;
+
     if (isNaN(id) || id <= 0) {
       return res.status(400).json({
         code: 400,
@@ -104,7 +115,7 @@ router.put('/:id', async (req, res) => {
         data: null
       });
     }
-    
+
     // 验证输入数据
     const errors = Memo.validate(title, content);
     if (errors.length > 0) {
@@ -114,9 +125,14 @@ router.put('/:id', async (req, res) => {
         data: { errors }
       });
     }
-    
-    const memo = await Memo.update(id, title.trim(), content.trim());
-    
+
+    const options = {};
+    if (priority !== undefined) options.priority = priority;
+    if (status !== undefined) options.status = status;
+    if (tags !== undefined) options.tags = tags;
+
+    const memo = await Memo.update(id, userId, title.trim(), content.trim(), options);
+
     if (!memo) {
       return res.status(404).json({
         code: 404,
@@ -124,7 +140,7 @@ router.put('/:id', async (req, res) => {
         data: null
       });
     }
-    
+
     res.json({
       code: 200,
       message: '更新成功',
@@ -141,10 +157,11 @@ router.put('/:id', async (req, res) => {
 });
 
 // 删除备忘录
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', userAuthMiddleware, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    
+    const userId = req.userId;
+
     if (isNaN(id) || id <= 0) {
       return res.status(400).json({
         code: 400,
@@ -152,9 +169,9 @@ router.delete('/:id', async (req, res) => {
         data: null
       });
     }
-    
-    const deleted = await Memo.delete(id);
-    
+
+    const deleted = await Memo.delete(id, userId);
+
     if (!deleted) {
       return res.status(404).json({
         code: 404,
@@ -162,7 +179,7 @@ router.delete('/:id', async (req, res) => {
         data: null
       });
     }
-    
+
     res.json({
       code: 200,
       message: '删除成功',

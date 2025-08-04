@@ -21,71 +21,119 @@ class Memo {
       id: row.id,
       title: row.title,
       content: row.content,
-      createTime: this.formatDateTime(row.create_time),
-      updateTime: this.formatDateTime(row.update_time)
+      priority: row.priority || 0,
+      status: row.status || 0,
+      tags: row.tags ? JSON.parse(row.tags) : [],
+      createTime: this.formatDateTime(row.created_time),
+      updateTime: this.formatDateTime(row.updated_time)
     };
   }
 
-  // 获取所有备忘录（按更新时间倒序）
-  static async findAll() {
+  // 获取用户的所有备忘录（按更新时间倒序）
+  static async findByUserId(userId) {
     const connection = getConnection();
     const [rows] = await connection.execute(
-      'SELECT * FROM memos ORDER BY update_time DESC'
+      'SELECT * FROM memos WHERE user_id = ? ORDER BY updated_time DESC',
+      [userId]
     );
     return rows.map(row => this.formatMemo(row));
   }
 
-  // 根据ID获取备忘录
-  static async findById(id) {
+  // 根据ID和用户ID获取备忘录
+  static async findByIdAndUserId(id, userId) {
     const connection = getConnection();
     const [rows] = await connection.execute(
-      'SELECT * FROM memos WHERE id = ?',
-      [id]
+      'SELECT * FROM memos WHERE id = ? AND user_id = ?',
+      [id, userId]
     );
-    
+
     if (rows.length === 0) {
       return null;
     }
-    
+
     return this.formatMemo(rows[0]);
   }
 
   // 创建新备忘录
-  static async create(title, content) {
+  static async create(userId, title, content, options = {}) {
     const connection = getConnection();
+    const { priority = 0, status = 0, tags = [] } = options;
+    const tagsJson = JSON.stringify(tags);
+
     const [result] = await connection.execute(
-      'INSERT INTO memos (title, content) VALUES (?, ?)',
-      [title, content]
+      'INSERT INTO memos (user_id, title, content, priority, status, tags) VALUES (?, ?, ?, ?, ?, ?)',
+      [userId, title, content, priority, status, tagsJson]
     );
-    
+
+    // 更新用户备忘录数量
+    await this.updateUserMemoCount(userId);
+
     // 获取新创建的备忘录
-    return await this.findById(result.insertId);
+    return await this.findByIdAndUserId(result.insertId, userId);
   }
 
   // 更新备忘录
-  static async update(id, title, content) {
+  static async update(id, userId, title, content, options = {}) {
     const connection = getConnection();
+    const { priority, status, tags } = options;
+
+    let updateFields = ['title = ?', 'content = ?', 'updated_time = NOW()'];
+    let updateValues = [title, content];
+
+    if (priority !== undefined) {
+      updateFields.push('priority = ?');
+      updateValues.push(priority);
+    }
+
+    if (status !== undefined) {
+      updateFields.push('status = ?');
+      updateValues.push(status);
+    }
+
+    if (tags !== undefined) {
+      updateFields.push('tags = ?');
+      updateValues.push(JSON.stringify(tags));
+    }
+
+    updateValues.push(userId, id);
+
     const [result] = await connection.execute(
-      'UPDATE memos SET title = ?, content = ? WHERE id = ?',
-      [title, content, id]
+      `UPDATE memos SET ${updateFields.join(', ')} WHERE user_id = ? AND id = ?`,
+      updateValues
     );
-    
+
     if (result.affectedRows === 0) {
       return null;
     }
-    
-    return await this.findById(id);
+
+    return await this.findByIdAndUserId(id, userId);
   }
 
   // 删除备忘录
-  static async delete(id) {
+  static async delete(id, userId) {
     const connection = getConnection();
     const [result] = await connection.execute(
-      'DELETE FROM memos WHERE id = ?',
-      [id]
+      'DELETE FROM memos WHERE id = ? AND user_id = ?',
+      [id, userId]
     );
-    
-    return result.affectedRows > 0;
+
+    if (result.affectedRows > 0) {
+      // 更新用户备忘录数量
+      await this.updateUserMemoCount(userId);
+      return true;
+    }
+
+    return false;
+  }
+
+  // 更新用户备忘录数量
+  static async updateUserMemoCount(userId) {
+    const connection = getConnection();
+    await connection.execute(`
+      UPDATE users SET memo_count = (
+        SELECT COUNT(*) FROM memos WHERE user_id = ?
+      ) WHERE user_id = ?
+    `, [userId, userId]);
   }
 
   // 验证备忘录数据

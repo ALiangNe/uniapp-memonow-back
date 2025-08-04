@@ -34,15 +34,45 @@ async function initDatabase() {
     await connection.execute(`CREATE DATABASE IF NOT EXISTS ${dbConfig.database} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
     await connection.end();
 
-    // 创建备忘录表
+    // 创建用户表
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        user_id VARCHAR(100) UNIQUE NOT NULL COMMENT '用户唯一标识',
+        user_type ENUM('wx', 'h5', 'app', 'other') NOT NULL COMMENT '用户类型',
+        openid VARCHAR(50) DEFAULT NULL COMMENT '微信openid（仅微信用户）',
+        session_key VARCHAR(50) DEFAULT NULL COMMENT '微信session_key（仅微信用户）',
+        nickname VARCHAR(50) DEFAULT NULL COMMENT '用户昵称',
+        avatar_url VARCHAR(255) DEFAULT NULL COMMENT '头像URL',
+        memo_count INT DEFAULT 0 COMMENT '备忘录数量',
+        last_active_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '最后活跃时间',
+        created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+        updated_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        INDEX idx_user_id (user_id),
+        INDEX idx_openid (openid),
+        INDEX idx_user_type (user_type),
+        INDEX idx_last_active (last_active_time)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户信息表'
+    `);
+
+    // 创建备忘录表（支持多用户）
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS memos (
-        id INT PRIMARY KEY AUTO_INCREMENT COMMENT '备忘录ID',
-        title VARCHAR(50) NOT NULL COMMENT '标题',
-        content TEXT NOT NULL COMMENT '内容',
-        create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-        update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-        INDEX idx_update_time (update_time DESC)
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        user_id VARCHAR(100) NOT NULL COMMENT '用户唯一标识',
+        title VARCHAR(200) NOT NULL COMMENT '备忘录标题',
+        content TEXT COMMENT '备忘录内容',
+        priority TINYINT DEFAULT 0 COMMENT '优先级 0-普通 1-重要 2-紧急',
+        status TINYINT DEFAULT 0 COMMENT '状态 0-未完成 1-已完成',
+        tags VARCHAR(500) DEFAULT NULL COMMENT '标签，JSON格式',
+        created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+        updated_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        INDEX idx_user_id (user_id),
+        INDEX idx_created_time (created_time),
+        INDEX idx_updated_time (updated_time),
+        INDEX idx_status (status),
+        INDEX idx_priority (priority),
+        INDEX idx_user_update_time (user_id, updated_time DESC)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='备忘录表'
     `);
 
